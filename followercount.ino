@@ -3,8 +3,12 @@
 #include <ESP8266HTTPClient.h>
 #include <ArduinoJson.h>
 
+#include <TM1637Display.h>
 
+#define CLK_PIN D2
+#define DIO_PIN D3
 
+TM1637Display display_follows(CLK_PIN, DIO_PIN);
 
 const String twitch_name = "sophiedeziel";
 const String twitch_thumbprint = "0819d6edfd12c734212d56383e1428e2cefd61ea";
@@ -30,15 +34,17 @@ void setup() {
   streamer_id = getStreamerId(twitch_name);
   Serial.print("ID: ");
   Serial.println(streamer_id);
+
+  display_follows.setBrightness(0x0a);
 }
 
 void loop() {
-  delay(3000);
   if (streamer_id > 0) {
     int count = getStreamerFollows();
     Serial.println(count);
+    display_follows.showNumberDec(count);
   }
-  delay(30000);
+  delay(5000);
 }
 
 int getStreamerId(String username) {
