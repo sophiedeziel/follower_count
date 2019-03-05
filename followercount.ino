@@ -67,8 +67,9 @@ int getStreamerId(String username) {
   String payload = http.getString();
   http.end();
 
-  DynamicJsonBuffer jsonBuffer;
-  JsonObject& root = jsonBuffer.parseObject(payload);
+  DynamicJsonDocument jsonBuffer(1024);
+  deserializeJson(jsonBuffer, payload);
+  JsonObject root = jsonBuffer.as<JsonObject>();
 
   int id = root["data"][0]["id"];
   return id;
@@ -83,8 +84,9 @@ int getStreamerFollows() {
   String payload = http.getString();
   http.end();
 
-  DynamicJsonBuffer jsonBuffer;
-  JsonObject& root = jsonBuffer.parseObject(payload);
+  DynamicJsonDocument jsonBuffer(1024);
+  deserializeJson(jsonBuffer, payload);
+  JsonObject root = jsonBuffer.as<JsonObject>();
 
   int count = root["total"];
   return count;
