@@ -38,10 +38,10 @@ void setup() {
   display_follows.setBrightness(0x0a);
 }
 
-
 void loop() {
-  int count = getStreamerFollows();
   if (streamer_id > 0) {
+    int count = getStreamerFollows();
+    Serial.println(count);
     int zeroes = 0;
     if (count % 10 == 0) {
       zeroes++;
@@ -101,9 +101,9 @@ void animateNumber(int count, int zeroes) {
       uint8_t number_frame[4] = {};
 
       int temp_count = count;
-      for (int j = 3; j > 0; j--) {
+      for (int j = 3; j >= 0; j--) {
         number_frame[j] = display_follows.encodeDigit(temp_count % 10);
-        Serial.println(count);
+
         temp_count = temp_count / 10;
       }
 
