@@ -1,10 +1,17 @@
 #include "secrets.h"
+
+#include <time.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266HTTPClient.h>
-#include <WiFiClientSecureBearSSL.h>
+#include <WiFiClientSecureAxTLS.h>
+using namespace axTLS;
 #include <ArduinoJson.h>
 
 #include <TM1637Display.h>
+
+#include "cacert.h"
+extern const unsigned char caCert[] PROGMEM;
+extern const unsigned int caCertLen;
 
 #define CLK_PIN D2
 #define DIO_PIN D3
@@ -16,17 +23,18 @@ TM1637Display display_follows(CLK_PIN, DIO_PIN);
 
 #if defined TWITCH
 const String twitch_name = "sophiedeziel";
-const String twitch_thumbprint = "0819d6edfd12c734212d56383e1428e2cefd61ea";
 int streamer_id;
 #endif
+
 #if defined YOUTUBE
 const String youtube_id = "UCrdnnnPaAyvQziO0mtz89uw";
 #endif
 
+axTLS::WiFiClientSecure client;
 
 void setup() {
   Serial.begin(115200);
-  Serial.println("");
+  Serial.println("Starting");
 
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
@@ -48,6 +56,30 @@ void setup() {
 #endif
 
   display_follows.setBrightness(0x0a);
+
+  configTime(8 * 3600, 0, "pool.ntp.org", "time.nist.gov");
+  time_t now = time(nullptr);
+  while (now < 8 * 3600 * 2) {
+    delay(500);
+    Serial.print(".");
+    now = time(nullptr);
+  }
+  Serial.println("");
+  struct tm timeinfo;
+  gmtime_r(&now, &timeinfo);
+  Serial.print("Current time: ");
+  Serial.print(asctime(&timeinfo));
+  // Load root certificate in DER format into WiFiClientSecure object
+  bool res = client.setCACert_P(caCert, caCertLen);
+  if (!res) {
+    Serial.println("Failed to load root CA certificate!");
+    while (true) {
+      yield();
+    }
+  }
+  if (!client.connect("api.twitch.tv", 443)) {
+    Serial.println("connection failed");
+  }
 }
 
 void loop() {
@@ -71,17 +103,20 @@ void loop() {
   }
   animateNumber(count, zeroes);
 
-
   delay(5000);
 }
 
 #ifdef TWITCH
 int getStreamerId(String username) {
+
   HTTPClient http;
-  http.begin("https://api.twitch.tv/helix/users?login=sophiedeziel", twitch_thumbprint);
+
+  http.begin(client, "https://api.twitch.tv/helix/users?login=" + twitch_name);
 
   http.addHeader("Client-ID", twitch_client);
   int httpCode = http.GET();
+  Serial.print("HTTP code: ");
+  Serial.println(httpCode);
   String payload = http.getString();
   http.end();
 
@@ -99,11 +134,14 @@ int getStreamerFollows() {
   int count = 0;
   if (streamer_id > 0) {
     HTTPClient http;
-    http.begin("https://api.twitch.tv/helix/users/follows?to_id=" + String(streamer_id), twitch_thumbprint);
+    http.begin(client, "https://api.twitch.tv/helix/users/follows?to_id=" + String(streamer_id));
 
     http.addHeader("Client-ID", twitch_client);
     int httpCode = http.GET();
+    Serial.print("HTTP code: ");
+    Serial.println(httpCode);
     String payload = http.getString();
+    Serial.println(payload);
     http.end();
 
     DynamicJsonDocument jsonBuffer(1024);
@@ -118,38 +156,27 @@ int getStreamerFollows() {
 
 #ifdef YOUTUBE
 int getYoutuberFollows() {
-  const uint8_t fingerprint[20] = {0x53, 0xdf, 0xbd, 0xd9, 0x50, 0x7e, 0xd3, 0x66, 0x74, 0x32, 0x2c, 0xba, 0x7d, 0xc7, 0xfe, 0x28, 0x7a, 0xac, 0xd5, 0x08};
+  int count = 0;
 
-  HTTPClient http;
-  std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
-
-  client->setFingerprint(fingerprint);
-
-  HTTPClient https;
   String youtube_url = "https://www.googleapis.com/youtube/v3/channels?part=statistics&id=" + youtube_id + "&key=" + String(youtube_api_key);
 
-  if (https.begin(*client, String(youtube_url))) {
-    int httpCode = https.GET();
-    if (httpCode > 0) {
+  HTTPClient http;
+  http.begin(client, youtube_url);
 
-      if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
-        String payload = https.getString();
+  int httpCode = http.GET();
+  Serial.print("HTTP code: ");
+  Serial.println(httpCode);
+  String payload = http.getString();
+  Serial.println(payload);
+  http.end();
 
-        DynamicJsonDocument jsonBuffer(1024);
-        deserializeJson(jsonBuffer, payload);
-        JsonObject root = jsonBuffer.as<JsonObject>();
+  DynamicJsonDocument jsonBuffer(1024);
+  deserializeJson(jsonBuffer, payload);
+  JsonObject root = jsonBuffer.as<JsonObject>();
 
-        int count = root["items"][0]["statistics"]["subscriberCount"];
+  count = root["items"][0]["statistics"]["subscriberCount"];
 
-        Serial.println(count);
-        return count;
-      }
-    } else {
-      Serial.printf("[HTTPS] GET... failed, error: %s\n", https.errorToString(httpCode).c_str());
-      return -1;
-    }
-  }
-  https.end();
+  return count;
 }
 #endif
 
