@@ -181,27 +181,23 @@ int getYoutuberFollows() {
 #endif
 
 void animateNumber(int count, int zeroes) {
-  if (zeroes == 0) {
-    display_follows.showNumberDec(count);
-  } else {
-    for (int i = 0; i < 6; i++) {
+  display_follows.showNumberDec(count);
+  if (zeroes > 1) {
+    for (int i = 0; i < 13; i++) {
       uint8_t circle[6] = { SEG_A, SEG_B, SEG_C, SEG_D, SEG_E, SEG_F };
-      uint8_t number_frame[4] = {};
+      uint8_t number_frame[2] = {};
 
-      int temp_count = count;
-      for (int j = 3; j >= 0; j--) {
-        number_frame[j] = display_follows.encodeDigit(temp_count % 10);
-
-        temp_count = temp_count / 10;
+      for (int j = 0; j < 4; j++) {
+        number_frame[j] = circle[i % 6];
       }
-
-      for (int j = 0; j < zeroes; j++) {
-        number_frame[3 - j] = circle[i];
-      }
-
-      display_follows.setSegments(number_frame);
-      delay(150);
+      display_follows.setSegments(number_frame, 4, 4 - zeroes);
+      delay(60);
     }
     display_follows.showNumberDec(count);
   }
+}
+
+unsigned GetNumberOfDigits (unsigned i)
+{
+    return i > 0 ? (int) log10 ((double) i) + 1 : 1;
 }
